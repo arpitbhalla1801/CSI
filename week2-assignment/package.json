@@ -1,0 +1,22 @@
+{
+  "name": "file-management-tool",
+  "version": "1.0.0",
+  "description": "A simple file management tool using Node.js core modules",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "keywords": [
+    "nodejs",
+    "file-system",
+    "http",
+    "path",
+    "file-management"
+  ],
+  "author": "CSI Student",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
