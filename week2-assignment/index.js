@@ -1,5 +1,6 @@
 const http = require('http');
-const fs = require('fs');
+const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const url = require('url');
 
@@ -7,8 +8,8 @@ const hostname = '127.0.0.1';
 const port = 3000;
 
 const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir);
+if (!fsSync.existsSync(uploadsDir)) {
+    fsSync.mkdirSync(uploadsDir);
 }
 
 function sendJSON(res, data, statusCode = 200) {
@@ -19,6 +20,68 @@ function sendJSON(res, data, statusCode = 200) {
 function sendHTML(res, html) {
     res.writeHead(200, { 'Content-Type': 'text/html' });
     res.end(html);
+}
+
+async function parseRequestBody(req) {
+    return new Promise((resolve, reject) => {
+        let body = '';
+        req.on('data', chunk => body += chunk.toString());
+        req.on('end', () => {
+            try {
+                resolve(JSON.parse(body));
+            } catch (error) {
+                reject(new Error('Invalid JSON'));
+            }
+        });
+        req.on('error', reject);
+    });
+}
+
+async function checkFileExists(filePath) {
+    try {
+        await fs.access(filePath);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+async function createFileAsync(fileName, content) {
+    const filePath = path.join(uploadsDir, fileName);
+    
+    if (await checkFileExists(filePath)) {
+        throw new Error('File already exists');
+    }
+    
+    await fs.writeFile(filePath, content || '', 'utf8');
+    return `File '${fileName}' created successfully`;
+}
+
+async function readFileAsync(fileName) {
+    const filePath = path.join(uploadsDir, fileName);
+    
+    if (!(await checkFileExists(filePath))) {
+        throw new Error('File not found');
+    }
+    
+    const content = await fs.readFile(filePath, 'utf8');
+    return content;
+}
+
+async function deleteFileAsync(fileName) {
+    const filePath = path.join(uploadsDir, fileName);
+    
+    if (!(await checkFileExists(filePath))) {
+        throw new Error('File not found');
+    }
+    
+    await fs.unlink(filePath);
+    return `File '${fileName}' deleted successfully`;
+}
+
+async function listFilesAsync() {
+    const files = await fs.readdir(uploadsDir);
+    return files;
 }
 
 function getHTMLInterface() {
@@ -192,88 +255,62 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === '/api/create' && method === 'POST') {
-        let body = '';
-        req.on('data', chunk => body += chunk.toString());
-        req.on('end', () => {
-            try {
-                const { fileName, content } = JSON.parse(body);
-                
-                if (!fileName) {
-                    sendJSON(res, { success: false, message: 'Filename is required' }, 400);
-                    return;
-                }
-
-                const filePath = path.join(uploadsDir, fileName);
-                
-                if (fs.existsSync(filePath)) {
-                    sendJSON(res, { success: false, message: 'File already exists' }, 400);
-                    return;
-                }
-
-                fs.writeFileSync(filePath, content || '');
-                sendJSON(res, { success: true, message: `File '${fileName}' created successfully` });
-            } catch (error) {
-                sendJSON(res, { success: false, message: 'Error creating file: ' + error.message }, 500);
+        try {
+            const { fileName, content } = await parseRequestBody(req);
+            
+            if (!fileName) {
+                sendJSON(res, { success: false, message: 'Filename is required' }, 400);
+                return;
             }
-        });
+
+            const message = await createFileAsync(fileName, content);
+            sendJSON(res, { success: true, message });
+        } catch (error) {
+            const statusCode = error.message === 'File already exists' ? 400 : 500;
+            sendJSON(res, { success: false, message: error.message }, statusCode);
+        }
         return;
     }
 
     if (pathname === '/api/read' && method === 'GET') {
-        const fileName = parsedUrl.query.fileName;
-        
-        if (!fileName) {
-            sendJSON(res, { success: false, message: 'Filename is required' }, 400);
-            return;
-        }
-
-        const filePath = path.join(uploadsDir, fileName);
-        
         try {
-            if (!fs.existsSync(filePath)) {
-                sendJSON(res, { success: false, message: 'File not found' }, 404);
+            const fileName = parsedUrl.query.fileName;
+            
+            if (!fileName) {
+                sendJSON(res, { success: false, message: 'Filename is required' }, 400);
                 return;
             }
 
-            const content = fs.readFileSync(filePath, 'utf8');
+            const content = await readFileAsync(fileName);
             sendJSON(res, { success: true, content, message: 'File read successfully' });
         } catch (error) {
-            sendJSON(res, { success: false, message: 'Error reading file: ' + error.message }, 500);
+            const statusCode = error.message === 'File not found' ? 404 : 500;
+            sendJSON(res, { success: false, message: error.message }, statusCode);
         }
         return;
     }
 
     if (pathname === '/api/delete' && method === 'DELETE') {
-        let body = '';
-        req.on('data', chunk => body += chunk.toString());
-        req.on('end', () => {
-            try {
-                const { fileName } = JSON.parse(body);
-                
-                if (!fileName) {
-                    sendJSON(res, { success: false, message: 'Filename is required' }, 400);
-                    return;
-                }
-
-                const filePath = path.join(uploadsDir, fileName);
-                
-                if (!fs.existsSync(filePath)) {
-                    sendJSON(res, { success: false, message: 'File not found' }, 404);
-                    return;
-                }
-
-                fs.unlinkSync(filePath);
-                sendJSON(res, { success: true, message: `File '${fileName}' deleted successfully` });
-            } catch (error) {
-                sendJSON(res, { success: false, message: 'Error deleting file: ' + error.message }, 500);
+        try {
+            const { fileName } = await parseRequestBody(req);
+            
+            if (!fileName) {
+                sendJSON(res, { success: false, message: 'Filename is required' }, 400);
+                return;
             }
-        });
+
+            const message = await deleteFileAsync(fileName);
+            sendJSON(res, { success: true, message });
+        } catch (error) {
+            const statusCode = error.message === 'File not found' ? 404 : 500;
+            sendJSON(res, { success: false, message: error.message }, statusCode);
+        }
         return;
     }
 
     if (pathname === '/api/list' && method === 'GET') {
         try {
-            const files = fs.readdirSync(uploadsDir);
+            const files = await listFilesAsync();
             sendJSON(res, { success: true, files, message: 'Files listed successfully' });
         } catch (error) {
             sendJSON(res, { success: false, message: 'Error listing files: ' + error.message }, 500);
@@ -287,9 +324,9 @@ const server = http.createServer(async (req, res) => {
 server.listen(port, hostname, () => {
     console.log(`File Management Tool running at http://${hostname}:${port}/`);
     console.log('Available endpoints:');
-    console.log('- GET  /           - Web interface');
-    console.log('- POST /api/create - Create a file');
-    console.log('- GET  /api/read   - Read a file');
-    console.log('- DELETE /api/delete - Delete a file');
-    console.log('- GET  /api/list   - List all files');
+    console.log('- GET  /');
+    console.log('- POST /api/create');
+    console.log('- GET  /api/read');
+    console.log('- DELETE /api/delete');
+    console.log('- GET  /api/list');
 });

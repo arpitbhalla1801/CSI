@@ -40,9 +40,11 @@
 - `DELETE /api/delete`
 - `GET /api/list`
 
-## Usage
+## Async Functions
 
-1. Create a File
-2. Read a File
-3. Delete a File
-4. List Files
+- `parseRequestBody(req)`
+- `checkFileExists(filePath)`
+- `createFileAsync(fileName, content)`
+- `readFileAsync(fileName)`
+- `deleteFileAsync(fileName)`
+- `listFilesAsync()`
