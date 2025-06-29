@@ -1,0 +1,28 @@
+{
+  "name": "express-web-server",
+  "version": "1.0.0",
+  "description": "A simple Express.js web server with basic routing and middleware",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": [
+    "express",
+    "nodejs",
+    "web-server",
+    "routing",
+    "middleware"
+  ],
+  "author": "CSI Student",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
